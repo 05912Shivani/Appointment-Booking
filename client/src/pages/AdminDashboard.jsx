@@ -14,6 +14,9 @@ export default function AdminDashboard() {
   const [providers, setProviders] = useState([])
   const [analytics, setAnalytics] = useState(null)
   const [auditLog, setAuditLog] = useState([])
+  const [pendingDeleteId, setPendingDeleteId] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   function refresh() {
     AdminAPI.listProviders().then(setProviders)
@@ -27,16 +30,17 @@ export default function AdminDashboard() {
     refresh()
   }
 
-  async function deleteProvider(provider) {
-    const confirmed = window.confirm(
-      `Permanently delete "${provider.businessName}"? This only works if they have no booking history — otherwise use Deactivate.`,
-    )
-    if (!confirmed) return
+  async function confirmDelete(provider) {
+    setDeleting(true)
+    setDeleteError('')
     try {
       await AdminAPI.deleteProvider(provider._id)
+      setPendingDeleteId(null)
       refresh()
     } catch (err) {
-      alert(err.response?.data?.error || 'Could not delete this provider')
+      setDeleteError(err.response?.data?.error || 'Could not delete this provider')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -66,20 +70,57 @@ export default function AdminDashboard() {
         <h2 className="font-medium mb-3 text-slate-700 dark:text-slate-300">Providers</h2>
         <ul className="flex flex-col gap-2">
           {providers.map((p) => (
-            <li key={p._id} className="card p-4 flex justify-between items-center text-sm">
-              <span>
-                <span className="font-medium">{p.businessName}</span>{' '}
-                <span className="text-slate-500 dark:text-slate-400">— {p.userId?.email}</span>
-                {!p.isActive && <span className="badge badge-cancelled ml-2">inactive</span>}
-              </span>
-              <div className="flex gap-2">
-                <button onClick={() => toggleActive(p)} className="btn btn-secondary !px-3 !py-1 text-xs">
-                  {p.isActive ? 'Deactivate' : 'Activate'}
-                </button>
-                <button onClick={() => deleteProvider(p)} className="btn btn-danger !px-3 !py-1 text-xs">
-                  Delete
-                </button>
+            <li key={p._id} className="card p-4 text-sm">
+              <div className="flex justify-between items-center gap-4">
+                <span className="min-w-0">
+                  <span className="font-medium">{p.businessName}</span>{' '}
+                  <span className="text-slate-500 dark:text-slate-400">— {p.userId?.email}</span>
+                  {!p.isActive && <span className="badge badge-cancelled ml-2">inactive</span>}
+                </span>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={() => toggleActive(p)} className="btn btn-secondary !px-3 !py-1 text-xs">
+                    {p.isActive ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDeleteError('')
+                      setPendingDeleteId(p._id)
+                    }}
+                    className="btn btn-danger !px-3 !py-1 text-xs"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
+
+              {pendingDeleteId === p._id && (
+                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
+                  <p className="text-slate-600 dark:text-slate-400">
+                    Permanently delete <span className="font-medium">"{p.businessName}"</span>? This only works if
+                    they have zero booking history — otherwise use Deactivate instead.
+                  </p>
+                  {deleteError && <p className="text-red-600 dark:text-red-400">{deleteError}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setPendingDeleteId(null)
+                        setDeleteError('')
+                      }}
+                      disabled={deleting}
+                      className="btn btn-secondary !px-3 !py-1 text-xs"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => confirmDelete(p)}
+                      disabled={deleting}
+                      className="btn btn-danger !px-3 !py-1 text-xs"
+                    >
+                      {deleting ? 'Deleting...' : 'Yes, permanently delete'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </li>
           ))}
           {providers.length === 0 && (

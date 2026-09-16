@@ -28,11 +28,16 @@ const slotQuerySchema = z.object({
 
 async function listProviderSlots(req, res) {
   const { serviceId, from, to } = slotQuerySchema.parse(req.query)
+  // Includes held/booked slots (not just open ones) and today's already-past
+  // slots, so the client can render the full schedule with booked/past slots
+  // shown as disabled rather than silently missing from the grid.
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
   const filter = {
     providerId: req.params.providerId,
     serviceId,
-    status: 'open',
-    startTime: { $gte: from ? new Date(from) : new Date() },
+    status: { $in: ['open', 'held', 'booked'] },
+    startTime: { $gte: from ? new Date(from) : startOfToday },
   }
   if (to) filter.startTime.$lte = new Date(to)
 
